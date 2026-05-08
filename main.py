@@ -1,29 +1,17 @@
 import telebot
-import google.generativeai as genai
+import requests
 import os
 from flask import Flask
 from threading import Thread
 
-# 1. AI Setup
-# እዚህ ጋር ያወጣኸው የ Google API Key በትክክል መኖሩን አረጋግጥ
-GOOGLE_API_KEY = "AIzaSyBkTnC4eHwvJsCPDt6YfyfwKqUd3wOa-Rg"
-genai.configure(api_key=GOOGLE_API_KEY)
-
-# ቦቱ ምን አይነት ባህሪ እንዲኖረው እንደምንፈልግ
-instruction = "አንተ Zeky AI ነህ። በጣም ጎበዝ፣ ስለ ጤና እና ትምህርት ጥልቅ እውቀት ያለህ ረዳት ነህ። ሁልጊዜ በአማርኛ በትህትና መልስ ስጥ።"
-
-model = genai.GenerativeModel(
-    model_name='gemini-1.5-flash',
-    system_instruction=instruction
-)
-
-# 2. Telegram Setup
+# 1. የቴሌግራም ቦት ዝግጅት
 BOT_TOKEN = "7996870817:AAGuIpYnjo6tMgrpMMhSYgzSnCkPK2iW9Sk"
 bot = telebot.TeleBot(BOT_TOKEN)
 
+# Render እንዳይዘጋ የሚያደርግ
 app = Flask('')
 @app.route('/')
-def home(): return "Zeky AI is Online!"
+def home(): return "Zeky AI is Working!"
 
 def run():
     port = int(os.environ.get("PORT", 8080))
@@ -35,19 +23,32 @@ def keep_alive():
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    bot.reply_to(message, "ሰላም! እኔ Zeky AI ነኝ። ሁሉንም ነገር መጠየቅ ትችላለህ። ምን ልርዳህ?")
+    bot.reply_to(message, "ሰላም! እኔ Zeky AI ነኝ። አሁን ዝግጁ ነኝ! ማንኛውንም ነገር መጠየቅ ወይም ምስል እንዲሳልልህ ማዘዝ ትችላለህ።")
 
 @bot.message_handler(func=lambda message: True)
 def chat(message):
     bot.send_chat_action(message.chat.id, 'typing')
+    user_text = message.text
+    
+    # ምስል የመፍጠር ጥያቄ ከሆነ
+    image_keywords = ["ሳልልኝ", "አሳይኝ", "ምስል", "draw", "image", "picture"]
+    if any(word in user_text.lower() for word in image_keywords):
+        # ጥያቄውን ወደ እንግሊዝኛ ቀይረን ለምስል መፍጠሪያው እንልካለን
+        image_url = f"https://pollinations.ai/p/{user_text.replace(' ', '%20')}?width=1080&height=1080&model=flux"
+        bot.send_photo(message.chat.id, image_url, caption="ይኸው የጠየቅከው ምስል!")
+        return
+
     try:
-        # AIውን መጠየቅ
-        response = model.generate_content(message.text)
+        # ለ AIው መልእክት መላክ (ያለ API Key የሚሰራ)
+        # እዚህ ጋር Zeky AI መሆኑን እናስተምረዋለን
+        system_prompt = "You are Zeky AI, a smart assistant who knows about health and education. Answer in Amharic. User says: "
+        api_url = f"https://text.pollinations.ai/{system_prompt}{user_text}"
+        
+        response = requests.get(api_url)
         bot.reply_to(message, response.text)
+        
     except Exception as e:
-        print(f"Error: {e}")
-        # ስህተቱ ምን እንደሆነ ለጥቂት ጊዜ እንዲያሳየን እዚህ ጋር እንቀይረው
-        bot.reply_to(message, f"AI Error: የ Google API Key ችግር ያለ ይመስላል። እባክህ ቁልፉን ቼክ አድርግ።")
+        bot.reply_to(message, "ይቅርታ፣ አሁንም ትንሽ ችግር አለ። ቆይቼ እሞክራለሁ።")
 
 if __name__ == "__main__":
     keep_alive()
